@@ -162,7 +162,7 @@ flowchart TD
 於專案根目錄執行：
 
 ```bash
-docker compose up --build -d
+docker compose up energy_dashboard_db -d
 ```
 
 ---
