@@ -145,6 +145,7 @@ flowchart TD
 ├── docker-compose.yml
 └── README.md
 ```
+
 <a id="如何啟動專案"></a>
 
 # 1. 怎麼跑起來（pnpm install、pnpm dev 等）
@@ -161,7 +162,7 @@ flowchart TD
 於專案根目錄執行：
 
 ```bash
-docker compose up energy_dashboard_db -d
+docker compose up --build -d
 ```
 
 ---

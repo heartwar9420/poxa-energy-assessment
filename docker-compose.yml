@@ -15,7 +15,7 @@ services:
     build: ./backend
     container_name: energy_dashboard_backend
     ports:
-      - '3000:3000'
+      - '8001:3000'
     depends_on:
       - db
     environment:
