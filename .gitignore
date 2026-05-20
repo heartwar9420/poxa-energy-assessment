@@ -1,0 +1,13 @@
+# 排除 node_modules 依賴套件套件包
+node_modules/
+
+# 排除最核心的機密環境變數檔案
+.env
+.env.local
+
+# 排除 Drizzle 產生的本地日誌或快取（如果有的話）
+.drizzle/
+
+# 排除編譯產出的檔案
+dist/
+build/
