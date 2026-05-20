@@ -7,7 +7,7 @@ import { ChartAttribute, TimeRange } from '@/types/charts';
 interface ChartToolbarProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
-  onAddChart: (deviceId: string, attribute: ChartAttribute) => Promise<void>;
+  onAddChart: (deviceId: string, attribute: ChartAttribute) => void;
   isAdding: boolean;
 }
 

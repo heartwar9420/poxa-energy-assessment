@@ -1,137 +1,99 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChartItem, ChartAttribute } from '@/types/charts';
 import { API_BASE_URL } from '../lib/configs';
 
 export function useCharts(currentDbId: string | null) {
-  const [charts, setCharts] = useState<ChartItem[]>([]);
+  const queryClient = useQueryClient();
+  const queryKey = ['charts', currentDbId];
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const {
+    data: charts = [],
+    isLoading,
+    error: fetchError,
+  } = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      if (!currentDbId) return [];
+      const res = await fetch(`${API_BASE_URL}/charts?dashboardId=${currentDbId}`, { signal });
+      if (!res.ok) throw new Error('API 回傳狀態異常');
+      return res.json() as Promise<ChartItem[]>;
+    },
+    enabled: !!currentDbId,
+  });
 
-  const [isAdding, setIsAdding] = useState(false);
-  const [deletingIds, setDeletingIds] = useState<string[]>([]);
-  const [mutationError, setMutationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!currentDbId) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    const fetchChartsData = async () => {
-      setIsLoading(true);
-      setFetchError(null);
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/charts?dashboardId=${currentDbId}`, { signal });
-
-        if (!res.ok) {
-          throw new Error('API 回傳狀態異常');
-        }
-
-        const data = (await res.json()) as ChartItem[];
-        setCharts(Array.isArray(data) ? data : []);
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          return;
-        }
-        console.error('無法取得圖表資料:', err);
-        setFetchError('無法取得圖表資料，請稍後再試');
-      } finally {
-        if (!signal.aborted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchChartsData();
-
-    return () => {
-      controller.abort();
-    };
-  }, [currentDbId]);
-
-  const addChart = async (deviceId: string, attribute: ChartAttribute) => {
-    if (!currentDbId || isAdding) return;
-
-    const previousCharts = [...charts];
-
-    const tempId = 'temp-chart-' + Date.now();
-
-    const optimisticChart = {
-      id: tempId,
-      deviceId,
-      attribute,
-      dashboardId: currentDbId,
-    } as unknown as ChartItem;
-
-    setCharts((prev) => [...prev, optimisticChart]);
-
-    setIsAdding(true);
-    setMutationError(null);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/charts`, {
+  const addMutation = useMutation({
+    mutationFn: async (variables: { deviceId: string; attribute: ChartAttribute }) => {
+      const res = await fetch(`${API_BASE_URL}/charts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId, attribute, dashboardId: currentDbId }),
+        body: JSON.stringify({ ...variables, dashboardId: currentDbId }),
       });
+      if (!res.ok) throw new Error('新增圖表失敗');
+      return res.json() as Promise<ChartItem>;
+    },
+    onMutate: async (newChartVariables) => {
+      await queryClient.cancelQueries({ queryKey });
 
-      if (!response.ok) {
-        throw new Error('新增圖表失敗: API 狀態異常');
+      const previousCharts = queryClient.getQueryData<ChartItem[]>(queryKey);
+
+      const tempId = 'temp-chart-' + Date.now();
+      const optimisticChart = {
+        id: tempId,
+        dashboardId: currentDbId!,
+        ...newChartVariables,
+      } as ChartItem;
+
+      queryClient.setQueryData<ChartItem[]>(queryKey, (old) => [...(old || []), optimisticChart]);
+
+      return { previousCharts, tempId };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousCharts) {
+        queryClient.setQueryData(queryKey, context.previousCharts);
       }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
 
-      const newChart = (await response.json()) as ChartItem;
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/charts/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('刪除圖表失敗');
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousCharts = queryClient.getQueryData<ChartItem[]>(queryKey);
 
-      setCharts((prev) => prev.map((chart) => (chart.id === tempId ? newChart : chart)));
-    } catch (err) {
-      console.error('新增圖表失敗:', err);
-      setMutationError('新增圖表失敗，請稍後再試');
+      queryClient.setQueryData<ChartItem[]>(
+        queryKey,
+        (old) => old?.filter((chart) => chart.id !== id) || [],
+      );
 
-      setCharts(previousCharts);
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  const deleteChart = async (id: string) => {
-    if (deletingIds.includes(id)) return;
-
-    const previousCharts = [...charts];
-
-    setCharts((prev) => prev.filter((chart) => chart.id !== id));
-
-    setDeletingIds((prev) => [...prev, id]);
-    setMutationError(null);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/charts/${id}`, { method: 'DELETE' });
-
-      if (!response.ok) {
-        throw new Error('刪除圖表失敗: API 狀態異常');
+      return { previousCharts };
+    },
+    onError: (err, id, context) => {
+      if (context?.previousCharts) {
+        queryClient.setQueryData(queryKey, context.previousCharts);
       }
-    } catch (err) {
-      console.error('刪除圖表失敗:', err);
-      setMutationError('刪除圖表失敗，請稍後再試');
-
-      setCharts(previousCharts);
-    } finally {
-      setDeletingIds((prev) => prev.filter((prevId) => prevId !== id));
-    }
-  };
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
 
   return {
     charts: currentDbId ? charts : [],
     isLoading,
-    fetchError,
-    isAdding,
-    deletingIds,
-    mutationError,
-    addChart,
-    deleteChart,
+    fetchError: fetchError ? '無法取得圖表資料' : null,
+    isAdding: addMutation.isPending,
+    deletingIds: deleteMutation.isPending ? [deleteMutation.variables] : [],
+    mutationError: addMutation.error?.message || deleteMutation.error?.message || null,
+    addChart: (deviceId: string, attribute: ChartAttribute) =>
+      addMutation.mutate({ deviceId, attribute }),
+    deleteChart: (id: string) => deleteMutation.mutate(id),
   };
 }

@@ -8,7 +8,7 @@ interface DashboardContentProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
   displayCharts: ChartItem[];
-  onAddChart: (deviceId: string, attribute: ChartAttribute) => Promise<void>;
+  onAddChart: (deviceId: string, attribute: ChartAttribute) => void;
   onDeleteChart: (id: string) => void;
   summary: { totalSites: number };
   dashboardName: string;
