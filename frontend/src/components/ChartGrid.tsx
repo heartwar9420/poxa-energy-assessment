@@ -12,7 +12,7 @@ export default function ChartGrid({ items, timeRange, onDelete }: ChartGridProps
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {items.map((item) => (
         <ChartWidget
-          key={`${item.id}-${item.deviceId}-${item.attribute}-${timeRange.type}-${timeRange.value || 'custom'}`}
+          key={`${item.id}-${item.deviceId}-${item.attribute}-${timeRange.type}-${'value' in timeRange && timeRange.value ? timeRange.value : 'custom'}`}
           id={item.id}
           deviceId={item.deviceId}
           attribute={item.attribute}
