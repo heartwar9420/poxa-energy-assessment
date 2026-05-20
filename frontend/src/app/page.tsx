@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState } from 'react';
 import DashboardTabs from '@/components/DashboardTabs';
 import { PageHeader } from '@/components/ui/PageHeader';
