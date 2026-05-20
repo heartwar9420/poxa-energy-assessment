@@ -12,8 +12,10 @@ export function useDashboardSummary(currentDbId: string | null) {
   const { data, isLoading, isError, error } = useQuery<SummaryData>({
     queryKey: ['dashboardSummary', currentDbId],
 
-    queryFn: async (): Promise<SummaryData> => {
-      const res = await fetch(`${API_BASE_URL}/dashboards/${currentDbId!}/summary`);
+    queryFn: async ({ signal }): Promise<SummaryData> => {
+      const res = await fetch(`${API_BASE_URL}/dashboards/${currentDbId!}/summary`, {
+        signal,
+      });
 
       if (!res.ok) {
         throw new Error('無法取得摘要資料');

@@ -47,9 +47,28 @@ export function useDashboards() {
       if (!response.ok) throw new Error('建立失敗');
       return response.json();
     },
+    onMutate: async (newName) => {
+      await queryClient.cancelQueries({ queryKey: ['dashboards'] });
+      const previousDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']);
+
+      const tempId = 'temp-create-' + Date.now();
+      queryClient.setQueryData(['dashboards'], (old: DashboardItem[] = []) => [
+        ...old,
+        { id: tempId, name: newName },
+      ]);
+
+      return { previousDbs, tempId };
+    },
+    onError: (err, _, context) => {
+      if (context?.previousDbs) {
+        queryClient.setQueryData(['dashboards'], context.previousDbs);
+      }
+    },
     onSuccess: (newDb) => {
-      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
       router.push(`${pathname}?dbId=${newDb.id}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
     },
   });
 
@@ -63,7 +82,22 @@ export function useDashboards() {
       if (!response.ok) throw new Error('重命名失敗');
       return response.json();
     },
-    onSuccess: () => {
+    onMutate: async ({ id, name: newName }) => {
+      await queryClient.cancelQueries({ queryKey: ['dashboards'] });
+      const previousDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']);
+
+      queryClient.setQueryData(['dashboards'], (old: DashboardItem[] = []) =>
+        old.map((db) => (db.id === id ? { ...db, name: newName } : db)),
+      );
+
+      return { previousDbs };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousDbs) {
+        queryClient.setQueryData(['dashboards'], context.previousDbs);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboards'] });
     },
   });
@@ -77,17 +111,30 @@ export function useDashboards() {
       if (!response.ok) throw new Error('刪除失敗');
       return true;
     },
-    onSuccess: () => {
-      const currentDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']) || [];
-      const updatedDbs = currentDbs.filter((db) => db.id !== currentDbId);
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['dashboards'] });
+      const previousDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']) || [];
 
-      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
+      const deletedId = currentDbId;
+      const updatedDbs = previousDbs.filter((db) => db.id !== deletedId);
+      queryClient.setQueryData(['dashboards'], updatedDbs);
 
       if (updatedDbs.length > 0) {
         router.push(`${pathname}?dbId=${updatedDbs[0].id}`);
       } else {
         router.push(pathname);
       }
+
+      return { previousDbs };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousDbs) {
+        queryClient.setQueryData(['dashboards'], context.previousDbs);
+        if (currentDbId) router.push(`${pathname}?dbId=${currentDbId}`);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
     },
   });
 
