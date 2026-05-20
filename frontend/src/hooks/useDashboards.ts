@@ -97,10 +97,20 @@ export function useDashboards() {
       const previousDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']) || [];
 
       const deletedId = currentDbId;
+
+      const deletedIndex = previousDbs.findIndex((db) => db.id === deletedId);
+
       const updatedDbs = previousDbs.filter((db) => db.id !== deletedId);
       queryClient.setQueryData(['dashboards'], updatedDbs);
 
-      return { previousDbs, updatedDbs };
+      let targetId: string | null = null;
+
+      if (updatedDbs.length > 0) {
+        const targetIndex = deletedIndex > 0 ? deletedIndex - 1 : 0;
+        targetId = updatedDbs[targetIndex].id;
+      }
+
+      return { previousDbs, targetId };
     },
     onError: (err, variables, context) => {
       if (context?.previousDbs) {
@@ -108,9 +118,8 @@ export function useDashboards() {
       }
     },
     onSuccess: (data, variables, context) => {
-      const remainingDbs = context?.updatedDbs || [];
-      if (remainingDbs.length > 0) {
-        router.push(`${pathname}?dbId=${remainingDbs[0].id}`);
+      if (context?.targetId) {
+        router.push(`${pathname}?dbId=${context.targetId}`);
       } else {
         router.push(pathname);
       }
