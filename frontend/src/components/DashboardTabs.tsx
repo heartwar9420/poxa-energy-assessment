@@ -165,7 +165,7 @@ export default function DashboardTabs({
           }`}
         />
         <button
-          type="submit"
+          type="button"
           disabled={isCreating}
           className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow ${
             isCreating

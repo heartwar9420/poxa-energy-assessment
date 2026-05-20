@@ -30,12 +30,22 @@ export function useDashboards() {
   useEffect(() => {
     if (isLoading || dashboards.length === 0) return;
 
-    const isInvalidDbId = currentDbId && !dashboards.some((db) => db.id === currentDbId);
+    const isOptimisticUpdating = dashboards.some((db) => db.id.startsWith('temp-'));
+    if (isOptimisticUpdating) return;
 
-    if (!currentDbId || isInvalidDbId) {
+    const hasCurrentDb = dashboards.some((db) => db.id === currentDbId);
+
+    if (!currentDbId) {
+      router.replace(`${pathname}?dbId=${dashboards[0].id}`);
+      return;
+    }
+
+    const isDeletingInProgress = queryClient.isMutating({ mutationKey: ['deleteDashboard'] }) > 0;
+
+    if (!hasCurrentDb && !isDeletingInProgress) {
       router.replace(`${pathname}?dbId=${dashboards[0].id}`);
     }
-  }, [isLoading, dashboards, currentDbId, pathname, router]);
+  }, [isLoading, dashboards, currentDbId, pathname, router, queryClient]);
 
   const createMutation = useMutation({
     mutationFn: async (name: string): Promise<DashboardItem> => {
@@ -72,6 +82,44 @@ export function useDashboards() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationKey: ['deleteDashboard'],
+    mutationFn: async (): Promise<boolean> => {
+      if (!currentDbId) throw new Error('未指定要刪除的看板');
+      const response = await fetch(`${API_BASE_URL}/dashboards/${currentDbId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('刪除失敗');
+      return true;
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['dashboards'] });
+      const previousDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']) || [];
+
+      const deletedId = currentDbId;
+      const updatedDbs = previousDbs.filter((db) => db.id !== deletedId);
+      queryClient.setQueryData(['dashboards'], updatedDbs);
+
+      return { previousDbs, updatedDbs };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousDbs) {
+        queryClient.setQueryData(['dashboards'], context.previousDbs);
+      }
+    },
+    onSuccess: (data, variables, context) => {
+      const remainingDbs = context?.updatedDbs || [];
+      if (remainingDbs.length > 0) {
+        router.push(`${pathname}?dbId=${remainingDbs[0].id}`);
+      } else {
+        router.push(pathname);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }): Promise<DashboardItem> => {
       const response = await fetch(`${API_BASE_URL}/dashboards/${id}`, {
@@ -95,42 +143,6 @@ export function useDashboards() {
     onError: (err, variables, context) => {
       if (context?.previousDbs) {
         queryClient.setQueryData(['dashboards'], context.previousDbs);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboards'] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (): Promise<boolean> => {
-      if (!currentDbId) throw new Error('未指定要刪除的看板');
-      const response = await fetch(`${API_BASE_URL}/dashboards/${currentDbId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('刪除失敗');
-      return true;
-    },
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ['dashboards'] });
-      const previousDbs = queryClient.getQueryData<DashboardItem[]>(['dashboards']) || [];
-
-      const deletedId = currentDbId;
-      const updatedDbs = previousDbs.filter((db) => db.id !== deletedId);
-      queryClient.setQueryData(['dashboards'], updatedDbs);
-
-      if (updatedDbs.length > 0) {
-        router.push(`${pathname}?dbId=${updatedDbs[0].id}`);
-      } else {
-        router.push(pathname);
-      }
-
-      return { previousDbs };
-    },
-    onError: (err, variables, context) => {
-      if (context?.previousDbs) {
-        queryClient.setQueryData(['dashboards'], context.previousDbs);
-        if (currentDbId) router.push(`${pathname}?dbId=${currentDbId}`);
       }
     },
     onSettled: () => {
