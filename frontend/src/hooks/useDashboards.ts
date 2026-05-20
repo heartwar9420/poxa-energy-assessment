@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { API_BASE_URL } from '@/lib/configs';
+import { API_BASE_URL } from '../lib/configs';
 
 export interface DashboardItem {
   id: string;

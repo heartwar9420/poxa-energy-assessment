@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { API_BASE_URL } from '@/lib/configs';
+import { API_BASE_URL } from '../lib/configs';
 
 interface SummaryData {
   totalSites: number;
