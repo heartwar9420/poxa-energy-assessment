@@ -1,8 +1,6 @@
 import EmptyState from '@/components/EmptyState';
-
 import { DashboardMetricsSection } from '@/components/DashboardMetricsSection';
 import ChartGrid from '@/components/ChartGrid';
-
 import { TimeRange, ChartItem, ChartAttribute } from '@/types/charts';
 import ChartToolbar from './ChartToolbar';
 
@@ -10,12 +8,11 @@ interface DashboardContentProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
   displayCharts: ChartItem[];
-
   onAddChart: (deviceId: string, attribute: ChartAttribute) => Promise<void>;
-
   onDeleteChart: (id: string) => void;
   summary: { totalSites: number };
   dashboardName: string;
+  isAdding: boolean;
 }
 
 export function DashboardContent({
@@ -26,6 +23,7 @@ export function DashboardContent({
   onDeleteChart,
   summary,
   dashboardName,
+  isAdding,
 }: DashboardContentProps) {
   return (
     <>
@@ -34,6 +32,7 @@ export function DashboardContent({
           timeRange={timeRange}
           onTimeRangeChange={onTimeRangeChange}
           onAddChart={onAddChart}
+          isAdding={isAdding}
         />
         <DashboardMetricsSection
           totalSites={summary.totalSites}

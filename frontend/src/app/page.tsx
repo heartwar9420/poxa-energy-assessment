@@ -31,6 +31,7 @@ function DashboardInner() {
     openDeleteConfirm,
     closeDeleteConfirm,
   } = useDashboardActions();
+  const { isAdding } = useCharts(currentDbId);
 
   const [newDbName, setNewDbName] = useState('');
   const [editingDbId, setEditingDbId] = useState<string | null>(null);
@@ -47,7 +48,10 @@ function DashboardInner() {
   const handleCreateSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmedName = newDbName.trim();
-    if (!trimmedName || isCreating) return;
+
+    if (!trimmedName || isCreating) {
+      return;
+    }
 
     const success = await handleCreate(trimmedName);
     if (success) setNewDbName('');
@@ -104,6 +108,7 @@ function DashboardInner() {
               onDeleteChart={deleteChart}
               summary={summary}
               dashboardName={dashboardName}
+              isAdding={isAdding}
             />
           </>
         )}

@@ -58,6 +58,19 @@ export function useCharts(currentDbId: string | null) {
   const addChart = async (deviceId: string, attribute: ChartAttribute) => {
     if (!currentDbId || isAdding) return;
 
+    const previousCharts = [...charts];
+
+    const tempId = 'temp-chart-' + Date.now();
+
+    const optimisticChart = {
+      id: tempId,
+      deviceId,
+      attribute,
+      dashboardId: currentDbId,
+    } as unknown as ChartItem;
+
+    setCharts((prev) => [...prev, optimisticChart]);
+
     setIsAdding(true);
     setMutationError(null);
 
@@ -73,10 +86,13 @@ export function useCharts(currentDbId: string | null) {
       }
 
       const newChart = (await response.json()) as ChartItem;
-      setCharts((prev) => [...prev, newChart]);
+
+      setCharts((prev) => prev.map((chart) => (chart.id === tempId ? newChart : chart)));
     } catch (err) {
       console.error('新增圖表失敗:', err);
       setMutationError('新增圖表失敗，請稍後再試');
+
+      setCharts(previousCharts);
     } finally {
       setIsAdding(false);
     }
@@ -84,6 +100,10 @@ export function useCharts(currentDbId: string | null) {
 
   const deleteChart = async (id: string) => {
     if (deletingIds.includes(id)) return;
+
+    const previousCharts = [...charts];
+
+    setCharts((prev) => prev.filter((chart) => chart.id !== id));
 
     setDeletingIds((prev) => [...prev, id]);
     setMutationError(null);
@@ -94,11 +114,11 @@ export function useCharts(currentDbId: string | null) {
       if (!response.ok) {
         throw new Error('刪除圖表失敗: API 狀態異常');
       }
-
-      setCharts((prev) => prev.filter((chart) => chart.id !== id));
     } catch (err) {
       console.error('刪除圖表失敗:', err);
       setMutationError('刪除圖表失敗，請稍後再試');
+
+      setCharts(previousCharts);
     } finally {
       setDeletingIds((prev) => prev.filter((prevId) => prevId !== id));
     }

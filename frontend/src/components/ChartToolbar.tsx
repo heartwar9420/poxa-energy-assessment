@@ -8,11 +8,13 @@ interface ChartToolbarProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
   onAddChart: (deviceId: string, attribute: ChartAttribute) => Promise<void>;
+  isAdding: boolean;
 }
+
 const SELECT_CLASSES =
   'block w-56 p-2.5 text-sm border border-slate-200 rounded-xl shadow-xs text-slate-950 bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-200 transition-shadow';
 
-export default function ChartToolbar({ onAddChart }: ChartToolbarProps) {
+export default function ChartToolbar({ onAddChart, isAdding }: ChartToolbarProps) {
   const deviceSelectId = useId();
   const attributeSelectId = useId();
 
@@ -67,10 +69,16 @@ export default function ChartToolbar({ onAddChart }: ChartToolbarProps) {
 
       <button
         type="button"
+        disabled={isAdding}
         onClick={() => onAddChart(selectedDevice, selectedAttribute)}
-        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 px-6 rounded-xl shadow-xs transition-colors active:scale-98 shrink-0"
+        className={`text-white text-xs font-semibold py-2.5 px-6 rounded-xl shadow-xs transition-all shrink-0 active:scale-98
+          ${
+            isAdding
+              ? 'bg-blue-400 cursor-not-allowed opacity-70 scale-95'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
       >
-        新增圖表
+        {isAdding ? '連線中...' : '新增圖表'}
       </button>
     </div>
   );
