@@ -1,210 +1,700 @@
-# 能源資料監控 Dashboard (Energy Data Dashboard)
+# Energy Data Dashboard
 
-這是一個高度客製化的能源資料監控面板，使用者可以自由選擇場域設備（Device）與數據指標（Attribute），組裝出專屬的即時圖表，並支援多組 Dashboard 切換與 URL 狀態分享。
+一個面向能源監控場景的即時 Telemetry Dashboard，支援多圖表自由組裝、WebSocket 即時串流，以及可擴充的前後端架構設計。
 
 ---
 
-## 1. 怎麼在本地端跑起來
+## README 導覽
 
-專案包含前後端與資料庫，請確保環境已安裝 Node.js (v20+) 與 Docker。
+1. 怎麼跑起來（pnpm install、pnpm dev 等）
+2. 用了哪些技術，為什麼選這些（特別是 chart library 和 ORM）
+3. Live update 我選了 polling 還是 WebSocket，為什麼？
+4. 做了哪些 bonus
+5. 如果再多給我一週，我會優先做什麼？
+6. 開發過程中遇到什麼卡關，怎麼解的（或我目前還沒解的）
+7. 協助來源：我用了哪些 AI 工具，哪些部分主要靠 AI ？
 
-**Step 1: 啟動基礎環境 (資料庫與後端)**
-請在專案根目錄下，使用 Docker Compose 啟動 PostgreSQL 與 API 伺服器：
+## 專案展示
+
+- 🔗 [Live Demo](https://poxa-energy-assessment.vercel.app/?dbId=5a5dd006-aac6-48d4-b2d0-92d7456cfdf0)
+
+### 操作流程展示
+
+- 建立 Dashboard
+- 新增 Telemetry 圖表
+- 接收即時資料更新
+- 切換不同 Dashboard
+- 移除圖表
+
+![Demo](./assets/demo.gif)
+
+- 🔗 [高畫質展示影片](https://github.com/user-attachments/assets/5d4eca83-19dd-4bd9-ad11-8ad26d90ec4b)
+
+## 核心特色
+
+- 支援多張圖表動態新增與刪除
+- 使用 WebSocket 即時更新 telemetry
+- Dashboard 狀態持久化於 PostgreSQL
+- 支援多 Dashboard 切換與 URL 狀態同步
+- 使用 ECharts + Canvas 處理高頻時間序列資料
+
+## 技術棧（Tech Stack）
+
+- Frontend：Next.js 14（App Router）、TypeScript、Tailwind CSS
+- Backend：Node.js + TypeScript
+- Database：PostgreSQL + Drizzle ORM
+- Realtime：WebSocket
+- Charting：Apache ECharts
+- Infrastructure：Docker Compose
+
+## 系統架構概覽
+
+```mermaid
+flowchart TD
+
+    A[Next.js Client]
+
+    A --> B[REST API]
+    A --> C[WebSocket Connection]
+
+    B --> D[(PostgreSQL)]
+
+    C --> E[WebSocket Manager]
+    E --> F[ECharts Components]
+
+    G[Telemetry Generator]
+    G --> D
+    G --> C
+```
+
+## 資料流架構（Data Flow）
+
+1. Frontend 透過 REST API 載入 Dashboard 與歷史 Telemetry 資料
+2. WebSocket 持續接收即時 Telemetry 更新
+3. WebSocket Manager 根據 device / attribute 分發資料
+4. Chart 元件增量更新 ECharts Instance
+5. PostgreSQL 持久化 Dashboard 與 Telemetry 資料
+
+## 核心架構決策
+
+| 問題                   | 採用方案                    | 原因                                  |
+| ---------------------- | --------------------------- | ------------------------------------- |
+| 高頻 Telemetry 更新    | WebSocket                   | 降低 Polling 所產生的額外 HTTP 負擔   |
+| 大量時間序列渲染       | ECharts（Canvas）           | 相較 SVG 在大量資料下效能更穩定       |
+| 多圖表訂閱管理         | Shared WebSocket Manager    | 避免瀏覽器建立過多 WebSocket 連線     |
+| Dashboard 狀態持久化   | PostgreSQL + Drizzle        | 兼顧資料持久化與團隊技術棧一致性      |
+| Offscreen 圖表渲染成本 | IntersectionObserver        | 暫停不可視圖表的更新處理              |
+| React re-render 壓力   | Incremental ECharts Updates | 降低高頻資料更新造成的 React 重繪成本 |
+
+## 專案結構
+
+```text
+.
+├── assets/                  # README demo gif / screenshots
+├── docs/                    # AI collaboration & architecture notes
+│
+├── backend/
+│   ├── db/
+│   │   ├── schema.ts        # Drizzle database schema
+│   │   └── index.ts         # Database connection
+│   │
+│   ├── routes/
+│   │   ├── charts.ts        # Chart related APIs
+│   │   ├── dashboards.ts    # Dashboard CRUD APIs
+│   │   └── telemetry.ts     # Telemetry APIs
+│   │
+│   ├── services/
+│   │   └── backgroundTasks.ts
+│   │                          # Telemetry generator & cleanup jobs
+│   │
+│   ├── server.ts            # Express/WebSocket server entry
+│   ├── drizzle.config.ts
+│   └── Dockerfile
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/             # Next.js App Router
+│   │   │
+│   │   ├── components/
+│   │   │   ├── ui/          # Shared reusable UI components
+│   │   │   ├── ChartGrid.tsx
+│   │   │   ├── ChartWidget.tsx
+│   │   │   ├── DashboardTabs.tsx
+│   │   │   └── ChartToolbar.tsx
+│   │   │
+│   │   ├── hooks/           # Custom hooks & business logic
+│   │   │   ├── useCharts.ts
+│   │   │   ├── useTelemetry.ts
+│   │   │   ├── useDashboards.ts
+│   │   │   └── useVisibility.ts
+│   │   │
+│   │   ├── lib/
+│   │   │   ├── websocket.ts # Shared WebSocket manager
+│   │   │   ├── configs.ts
+│   │   │   └── chart/
+│   │   │
+│   │   ├── constants/
+│   │   ├── types/
+│   │   └── utils/
+│   │
+│   ├── public/
+│   └── next.config.ts
+│
+├── docker-compose.yml
+└── README.md
+```
+
+# 1. 怎麼跑起來（pnpm install、pnpm dev 等）
+
+## 本地啟動方式（Local Setup）
+
+本專案包含前端、後端與 PostgreSQL 資料庫，請先確認環境已安裝：
+
+- Node.js（v20+）
+- Docker
+
+### 1. 啟動基礎服務
+
+於專案根目錄執行：
 
 ```bash
 docker compose up --build -d
 ```
 
-**Step 2: 設定環境變數**
-請進入 backend 與 frontend 資料夾，複製範例環境變數檔（註：Docker Compose 預設使用的資料庫連線已在 docker-compose.yml 中配置好，本地開發直接套用 .env.example 即可）：
+---
 
-```bash
-cp backend/.env.example backend/.env
-```
-
-**Step 3: 初始化資料庫 (Drizzle Migration & Seeding)**
-進入 backend 資料夾，安裝依賴並推送資料表結構與 Mock Data：
+### 2. 啟動 Backend
 
 ```bash
 cd backend
+
+cp .env.example .env
+
 npm install
+
 npx drizzle-kit push
-```
 
-**Step 4: 啟動後端與前端開發伺服器**
-請分別開啟兩個終端機（Terminal）視窗，分別啟動後端 API 與前端網頁：
-
-```bash
-cd backend
 npm run dev
 ```
+
+---
+
+### 3. 啟動 Frontend
 
 ```bash
 cd frontend
+
 npm install
+
 npm run dev
 ```
 
-## 啟動後，請瀏覽 http://localhost:3000。
+---
 
-## 技術選型與架構思路
+啟動完成後，請開啟：
 
-### 核心技術棧
+```txt
+http://localhost:3000
+```
 
-### 前端： Next.js (App Router), React, TypeScript, Tailwind CSS
+# 2. 用了哪些技術，為什麼選這些（特別是 chart library 和 ORM）
 
-### 狀態管理： TanStack Query (負責 Server State)、React Context (負責 UI 局部狀態)
+## 為什麼選擇 Apache ECharts？
 
-### 後端 / 資料庫： Node.js, PostgreSQL (Docker 容器化)
+本專案主要面向能源監控場景中的高頻 Telemetry 資料，因此在圖表庫選型時，我特別重視：
+
+- 大量時間序列資料的渲染能力
+- 高頻更新下的效能穩定性
+- 即時 Dashboard 的互動體驗
+
+綜合評估後，最終選擇使用 Apache ECharts。
+
+### 1. Canvas Rendering 更適合大量時間序列資料
+
+能源 Telemetry 資料會隨時間持續累積，若圖表同時需要呈現數千甚至上萬筆資料，基於 SVG 的圖表庫通常會產生大量 DOM 節點，容易導致畫面卡頓與記憶體壓力。
+
+ECharts 預設以 Canvas 作為主要渲染方式，在大量資料場景下能提供更穩定的效能與記憶體表現。
+
+### 2. 對即時 Dashboard 場景支援成熟
+
+ECharts 內建：
+
+- Tooltip
+- Data Zoom
+- Axis Pointer
+- Brush
+- Animation
+
+等完整互動能力，能有效降低 Dashboard 類型產品的額外開發成本。
+
+### 3. 降低 React 重繪壓力
+
+Telemetry 更新頻率高，如果每次資料更新都完全交由 React State 驅動，當圖表數量增加後，容易產生大量不必要的 re-render。
+
+因此本專案將圖表更新邏輯盡量交由 ECharts Instance 自身處理，而 React 主要負責：
+
+- 管理資料流
+- 管理 Chart Configuration
+- 控制元件生命週期
+
+藉此降低 React 在高頻更新場景下的渲染壓力。
 
 ---
 
-## 1. 為什麼選用 Apache ECharts？
+## 為什麼選用 Drizzle ORM？
 
-在能源監控與 BESS (電池儲能系統) 場域中，Telemetry 數據具有「高頻率」與「大資料量」的特性。為了確保**系統穩定性**與**觀看體驗**，我選擇 ECharts 作為核心圖表庫，主要考量如下：
+### 1. 團隊技術棧對齊（Team Alignment）
 
-1. **具備乘載巨量資料點的能力 (圖表渲染技術)**
-   傳統 React 圖表庫 (如 `Recharts`) 多基於 SVG 渲染，當時間區間拉長、圖表累積了成千上萬個歷史數據點時，SVG 會產生巨量的網頁節點 (DOM)，導致瀏覽器記憶體飆高、畫面嚴重卡頓。而 ECharts 底層採用 Canvas (`ZRender`) 渲染，將所有數據繪製在單一畫布上，即便承載上萬個資料點，依然能保持 60 FPS 的絕對流暢。
+由於團隊目前主要使用 `Drizzle ORM`，為了在未來能更快速地接軌既有專案與協作流程，因此本專案直接採用相同技術棧進行開發。
 
-2. **節省開發時間，專注於業務邏輯 (內建強大資料提示)**
-   能源 Dashboard 需要精準檢視 Telemetry 的時間序列數值。ECharts 原生支援強大的 `tooltip` (座標軸提示框)，只需簡單設定 `trigger: 'axis'`，就能在圖表上提供清晰的跨指標數據對齊與呈現，大幅省去重複造輪子手刻互動 UI 的時間。
+### 2. 更貼近原生 SQL，便於掌控查詢效能
 
-3. **保護前端執行緒，預防 React 效能風暴 (框架與渲染解耦)**
-   面對每秒不斷湧入的即時 WebSocket 數據，如果頻繁交給 React 的 `setState` 處理，會引發嚴重的 Virtual DOM 比對風暴，導致網頁主執行緒 (Main Thread) 癱瘓。為此，我選用了 `echarts-for-react` 套件，讓 React 只專注於管理資料結構 (Option 配置項)，而將實際的畫面更新交給 ECharts 自行處理，避開 React 繁重的重繪機制，有效防止系統因高頻更新而過載。
+相較於高度抽象化的 ORM，Drizzle 的 API 設計更貼近原生 SQL。
 
----
+在能源監控場景中，未來很容易出現：
 
-## 2. 為什麼選用 Drizzle ORM？
+- 聚合查詢（Aggregation）
+- Group By
+- 時間區間統計
+- 大量 Timeseries 分析
 
-1. **團隊技術堆疊對齊，加速入職貢獻 (Team Alignment)**
-   得知團隊目前主要使用 `Drizzle ORM`，為了能在入職後以最快速度無縫接軌專案，我選擇直接採用相同工具進行開發。這也是我面對技術選型時，最重視「團隊協作」與「務實產出」的考量。
+等需求。
 
-2. **貼近原生 SQL 語法，精準掌控查詢效能**
-   相比於其他高度抽象的 ORM，`Drizzle` 的語法設計非常貼近原生 SQL。在能源監控場域中，未來勢必會遇到複雜的數據聚合查詢（例如計算平均數值、按設備進行 `GROUP BY`），`Drizzle` 能讓我更直覺、精準地掌控資料庫查詢的效能。
+Drizzle 能讓我更直覺地掌控 SQL 行為與查詢效能。
 
-3. **純 TypeScript 開發，型別安全更直覺**
-   `Drizzle` 直接使用 `TypeScript` 來定義資料表結構，不需要額外學習其他工具特有的 Schema 語法。這讓資料庫的欄位型別能完美銜接 API 層，大幅提升開發效率並減少型別出錯的機會。
+### 3. 純 TypeScript Schema，型別一致性更高
 
----
+Drizzle 直接使用 TypeScript 定義 Schema，不需要額外學習獨立 DSL（Domain Specific Language）。
 
-## 3. 為什麼選用 WebSocket？
+這讓資料表型別能自然串接：
 
-本專案採用 `WebSocket` 作為即時資料更新的方案，主要基於以下兩點實務考量：
+- Database
+- API Layer
+- Frontend Types
 
-1. **解決高頻更新的效能瓶頸 (傳輸效率優勢)**
-   能源監控場域極度重視數據的即時性。若採用傳統的 HTTP 輪詢 (Polling) 機制，每秒頻繁發送請求會產生大量重複的標頭資料 (Header overhead)，且重複建立 TCP 連線非常消耗伺服器資源。而 `WebSocket` 建立持久連線後，能以極低的延遲將數據即時推送至前端。
-
-2. **前端連線架構優化 (WebSocket Manager)**
-   為了避免網頁上「一張圖表就佔用一條連線」導致瀏覽器連線數過載，我在前端實作了統一的 `WebSocket Manager`。透過這個管理機制，整個應用程式只需維持單一的 `WebSocket` 連線，並由管理員集中收攏與分發各張圖表的數據訂閱 (Subscription)，達到精準派發並大幅節省連線資源。
+降低型別不一致與資料結構錯誤的風險。
 
 ---
 
-## 4. 已完成功能與任務對標 (Features & Bonus)
+# 3. Live update 我選了 polling 還是 WebSocket，為什麼？
 
-本專案不僅完整實作了核心功能，並針對挑戰書中的 Bonus 項目進行了全數落實，整體介面亦參考了高質感的工業級視覺風格進行客製化打造。
+Telemetry 屬於持續更新的即時資料，因此本專案選擇使用 `WebSocket`，而非傳統 Polling。
+
+若採用 Polling，當更新頻率提高後，會產生大量重複 HTTP Request，進一步增加：
+
+- Server 負擔
+- Network Overhead
+- Client 不必要的重新請求
+
+WebSocket 建立長連線後，Server 可以主動推送資料，更符合即時 Dashboard 的需求。
+
+### WebSocket Manager
+
+此外，前端額外實作了一層 WebSocket Manager。
+
+原因在於：
+
+若每張圖表都各自建立 WebSocket 連線，當 Dashboard 同時存在大量 Chart 時，瀏覽器連線數量會快速增加。
+
+因此目前整個 Frontend 僅維持：
+
+- 單一 WebSocket 連線
+- 統一資料接收入口
+
+再由 Manager 根據：
+
+- deviceId
+- attribute
+
+將資料分發給對應的 Chart 元件。
+
+這樣能有效降低：
+
+- 瀏覽器連線成本
+- 重複訂閱問題
+- WebSocket 管理複雜度
+
+---
+
+## 已完成功能與任務對標（Features & Bonus）
+
+本專案除了完整實作題目要求的核心功能外，也針對 Bonus 項目進行延伸設計與實作，並額外補充即時 Dashboard 場景下的效能與架構思考。
 
 ### 核心功能
 
-- **圖表自由組裝**：支援使用者自由選擇設備 (`Device`) 與數據指標 (`Attribute`) 來新增圖表，並支援多張圖表並存與動態刪除。
+- **圖表自由組裝**
+  支援使用者自由選擇 `Device` 與 `Attribute` 建立圖表，並支援多張圖表同時存在、動態新增與刪除。
+
+# 4. 做了哪些 bonus
 
 ### Bonus 任務對標實作
 
-- **Bonus 1 - 視覺風格優化**：整體 UI 參考 POXA 的風格。
-- **Bonus 2 - 後端持久化與 Docker 容器化**：所有 Dashboard 的配置與圖表組合皆透過 `Drizzle ORM` 存入 `PostgreSQL` 資料庫，確保頁面重新整理或跨裝置時配置不遺失，並支援一鍵 `docker compose up` 完整起好環境。
-- **Bonus 3 - 後端即時 Mock Data 與自動清理機制**：我在後端實作了常駐型的背景任務 (`startBackgroundTasks`)：
-  1. **動態數據生成**：伺服器啟動後，每秒會自動模擬並計算物聯網場域的時間序列（Timeseries）數據，並同時寫入 `PostgreSQL` 與進行 `WebSocket` 即時廣播。
-  2. **自動記憶體防禦**：為了避免大量數據癱瘓本地資料庫，實作了定時清理機制，每分鐘自動清除 5 分鐘前的歷史舊數據，維持資料庫的輕量流暢。
+- **Bonus 1 - 視覺風格優化**
+  整體 UI 參考 POXA 能源監控系統的設計風格。
+- **Bonus 2 - 後端持久化與 Docker 容器化**
+  所有 Dashboard 配置與圖表組合皆透過 `Drizzle ORM` 持久化至 `PostgreSQL`，確保重新整理頁面或跨裝置使用時狀態不遺失，並透過 `Docker Compose` 支援一鍵啟動完整開發環境。
 
-* **Bonus 4 - URL 狀態同步 (Single Source of Truth)**：將當前選取的 Dashboard 狀態即時反映於網址上（例如 `?dbId=xxx`）。不僅方便使用者複製連結直接分享給同事觀看相同畫面，也讓前端 Router 成為唯一的真理來源。
-* **Bonus 5 - 多組 Dashboard 管理**：實作了多租戶概念的場域管理。使用者可以自由創建、改名、切換、刪除多組獨立的 Dashboard（例如：「AUO 場域」、「綠岩監控」），且各自的圖表配置均持久化於資料庫中。
-* **Bonus 6 - 與 AI 協作的真實痕跡**：誠實記錄並檢附與 AI 來回過招、架構重構、以及「拒絕 AI 過度工程建議」的思維轉折，詳見下方專節。
+- **Bonus 3 - 後端即時 Mock Data 與自動清理機制**
+  後端實作常駐型 Background Tasks（`startBackgroundTasks`），模擬真實 IoT 場域中的高頻 Telemetry 更新情境：
+  1. **動態資料生成**
+     Server 啟動後，每秒自動生成 Timeseries Telemetry 資料，並同步寫入 PostgreSQL 與透過 WebSocket 即時廣播。
+  2. **自動清理機制**
+     為避免大量測試資料長時間累積造成資料庫膨脹，額外實作定時 Cleanup Job，每分鐘自動清除 5 分鐘前的歷史資料，維持本地開發環境的穩定性。
+
+- **Bonus 4 - URL 狀態同步（Single Source of Truth）**
+  將當前 Dashboard 狀態同步至 URL Query String（例如 `?dbId=xxx`），讓使用者可以直接分享相同 Dashboard View，同時也讓 Router 成為前端唯一狀態來源，降低狀態同步複雜度。
+
+- **Bonus 5 - 多組 Dashboard 管理**
+  支援多組 Dashboard 的建立、命名、切換與刪除，模擬多場域（Multi-site）監控情境，且每組 Dashboard 的圖表配置皆獨立持久化於資料庫中。
+
+* **Bonus 6 - 與 AI 協作的真實痕跡**
+  保留實際與 AI 協作過程中的架構討論、Code Review、效能優化與重構紀錄，包含拒絕 AI 過度工程建議的實際案例，用於展示開發過程中的工程判斷與架構取捨。詳見下方專節。
+
 * **Bonus 7 - 100 個場域極端效能思考題**：針對高頻率、大量資料湧入的前端效能瓶頸，提出了具體的架構防禦策略，詳見下方專節。
 
 ---
 
-### Bonus 7 思考題
+## Bonus 7 思考題
 
-**情境：** 如果 Dashboard 要顯示 100 個 BESS 場域、每個場域每秒回傳一筆 telemetry，前端會遇到什麼問題？我會怎麼處理？
+## 如果這個 dashboard 要顯示 100 個 BESS 場域、每個場域每秒回傳一筆 telemetry，前端會遇到什麼問題？你會怎麼處理？
 
-### 面臨的問題
+### 可能面臨的問題
 
-1. **重新渲染風暴 (Re-render Storm)**：每秒高達 100 筆更新湧入，如果每次資料跳動都直接觸發 React 重繪，頻繁且巨量的 Virtual DOM 比對將會癱瘓網頁主執行緒，導致畫面嚴重掉幀、卡頓。
-2. **瀏覽器記憶體崩潰 (Memory Leak)**：時間序列數據是持續不斷累積的。如果前端收到資料後，隨時間無限制地將數據推入陣列中，不用幾小時瀏覽器的記憶體就會被吃光。
-3. **網頁 DOM 節點過載**：同時渲染 100 張圖表，如果選用基於 SVG 渲染的圖表庫，網頁上會產生數以萬計的 DOM 節點，瀏覽器效能會瞬間崩潰。
+#### 1. 高頻 State Update 與 React Re-render 壓力
 
-#### 我的架構防禦策略（現況實作與未來展望）
+若每筆 Telemetry 更新都直接觸發 React State 更新，當大量資料同時湧入時，容易造成頻繁 re-render，進一步影響畫面流暢度與互動體驗。
 
-1. **【已實作】視窗內動態渲染 (Lazy Rendering) 搭配 Canvas 技術**
-   - **只處理看得到的圖表**：我目前在專案中已透過網頁內建的 `IntersectionObserver` API 進行監聽。**只有當圖表滑入使用者當前的螢幕視窗內時，才去建立 WebSocket 訂閱與更新數據**；一旦滑出視窗外，則自動斷開訂閱與暫停處理。這將運算資源完美留給當前焦點。經過實測，即便使用者開啟 100 個場域，網頁依體感依然流暢、不卡頓。
-   - **底層圖表選型**：本專案選用基於 Canvas 技術的 `ECharts`（透過 `echarts-for-react`），將所有數據繪製在單一畫布上，本質上就比 SVG 輕量非常多。
+#### 2. 長時間 Timeseries 累積導致記憶體膨脹
 
-2. **【未來擴充防禦 A】節流緩衝批次更新 (Buffer Batching)**
-   如果未來遇到極端情境（例如使用者用大螢幕同時把 100 張圖表拉在同一個畫面中觀看），我預計在 `WebSocket` 接收端加入緩衝機制（例如利用 `throttle` 節流函數）。將 0.5 秒內收到的訊號先打包，再「一次性」更新到 State 中，將原本每秒 100 次的渲染頻率驟降至每秒 2 次，徹底消除重新渲染風暴。
+Telemetry 屬於持續累積的時間序列資料。
 
-3. **【未來擴充防禦 B】採用有界資料結構 (Bounded Data Structure)**
-   為了預防長時間掛機導致的記憶體過載，未來可以嚴格限制前端圖表內記憶體陣列的長度上限（例如只保留最近的 200 筆資料，超出就執行 `slice(-200)`）。當新數據進來時，自動剔除畫面外的舊數據，將記憶體的空間複雜度永久控制在 $O(1)$ 的安全範圍。
+若前端長時間無限制地將資料持續推入記憶體陣列中，瀏覽器記憶體使用量將持續成長，最終可能導致 Memory Leak 或頁面崩潰。
 
----
+#### 3. 大量圖表渲染造成 DOM 與 GPU 壓力
 
-## 5. 如果再多給我一週，我會優先做什麼？
+若同時渲染 100 張以上圖表，且圖表庫基於 SVG Rendering，將產生大量 DOM 節點，容易導致：
 
-如果時間允許，我會優先補齊以下兩個能同時提升「使用者體驗」與「系統可靠度」的核心功能：
+- Layout 計算成本上升
+- Repaint/Reflow 增加
+- GPU 與主執行緒負載過高
 
-1. **圖表拖曳排序與版面自訂 (提升使用者體驗)**
-   - **現況**：目前圖表是依序固定排列，缺乏版面配置的彈性。
-   - **優化計畫**：前端預計引入 `dnd-kit` 套件來實作高流暢度的網格拖曳功能；後端則會在 `Drizzle` 的 Schema 中為圖表資料表新增 `order` 或 `position` 欄位。讓使用者不僅能組裝圖表，還能自由決定圖表的優先級與觀看位置，並將版面配置完美持久化到 `PostgreSQL` 中。
-
-2. **核心邏輯的自動化測試防禦 (提升系統可靠度)**
-   - **現況**：目前專案專注於核心功能的快速交付，缺乏自動化測試的保護。
-   - **優化計畫**：
-     - **單元測試 (Unit Test)**：針對自訂的 Custom Hooks（如 `useCharts` 等非同步流程）編寫測試，確保在處理極端網路狀態（例如 WebSocket 斷線重連、API 報錯）時系統依然穩健。
-     - **端到端測試 (E2E Test)**：引入 `Playwright` 或 `Cypress` 工具，自動化模擬使用者從「建立 Dashboard ➔ 選擇設備與屬性 ➔ 新增圖表 ➔ 刪除圖表」的完整快樂路徑 (Happy Path)，確保未來系統進行架構重構時，核心商業邏輯絕對不會被破壞。
+最終造成畫面卡頓。
 
 ---
 
-## 6. 開發過程的真實挑戰：從「寫程式」到「管理 AI」
+## 我的架構防禦策略
 
-在這次專案中，受惠於熟練的工具應用，我在基礎功能（API 串接、UI 切版）的推進上非常快速，並沒有遇到太多傳統語法上的卡關。
+### 1. 【已實作】IntersectionObserver Lazy Rendering + Canvas Rendering
 
-我真正的挑戰與花費最多時間的地方，在於**「專案架構的優化」**與**「對抗 AI 幻覺 (AI Hallucinations)」**：
+#### 僅更新可視區域內的圖表
 
-1. **對抗 AI 的幻覺與盲點**
-   - **挑戰**：`AI` 雖然能極快地生成程式碼片段，但常常會給出看似合理、實則帶有錯誤的舊語法（例如在非同步處理中給出已被 React 生態淘汰的寫法，或在邏輯中鬼打牆）。
-   - **解法**：我深刻體會到「不能盲目相信工具生成的 Code」。我必須將自己切換為嚴格的 `Code Reviewer` 角色，逐行檢查 `AI` 的產出是否完全符合我的資料庫 Schema 設計與專案的真實邏輯。
+目前專案已透過 `IntersectionObserver` 監聽圖表可視狀態。
 
-2. **拒絕上帝元件 (God Component) 與架構重構**
-   - **挑戰**：當功能越加越多時，我發現主頁面 (`page.tsx`) 漸漸變成了一個同時處理 API 請求、`WebSocket` 連線、`URL` 網址狀態和龐大 UI 渲染的「上帝元件」，這在長期的代碼維護上是一場災難。
-   - **解法**：我花費了大量時間進行主動的架構重構。將純 UI 畫面拆分成 `DashboardTabs`、`ChartToolbar` 等獨立的模組化元件，並將複雜的業務邏輯抽離成具備單一職責的 `Custom Hooks`。在「追求開發速度」與「維持程式碼潔癖」之間取得完美平衡，是我這次開發最大的收穫。
+只有當 Chart 進入使用者目前可視區域時，才會：
+
+- 建立 WebSocket Subscription
+- 接收即時資料
+- 更新圖表內容
+
+當圖表離開視窗後，則會暫停更新與資料訂閱。
+
+這樣能有效避免背景中不可視圖表持續消耗：
+
+- CPU
+- Memory
+- Rendering Cost
+
+經過實測，即使同時建立大量圖表，頁面依然能維持流暢操作。
+
+#### 採用 Canvas-based Chart Rendering
+
+本專案選用基於 Canvas Rendering 的 Apache ECharts。
+
+相較於 SVG Rendering：
+
+- DOM 數量更少
+- 大量資料渲染效能更穩定
+- 更適合高頻 Timeseries 場景
+
+因此更符合能源監控 Dashboard 的需求。
 
 ---
 
-## 7. 協助來源與 AI 協作痕跡 (Bonus 6)
+# 5. 如果再多給我一週，我會優先做什麼？
 
-在這次專案中，我將 `AI` 工具（`Gemini`、`ChatGPT`）定位為我的「`Pair-programming` 夥伴」與「底層代碼產生器」。我負責整體的架構決策與使用者體驗（UX）把關，而 `AI` 負責幫我加速基礎語法的撰寫。
+若有額外開發時間，我會優先補強以下兩個方向：
 
-我認為與 `AI` 協作最大的挑戰不是語法卡關，而是**「如何作為一個稱職的 Code Reviewer，避免 AI 的過度工程 (Over-engineering) 與幻覺」**。
-
-### 真實案例：被我果斷拒絕的 AI 建議
-
-在實作 `WebSocket`（即時數據疊加）與 `REST API`（歷史資料載入）的銜接時，我原本的直覺設計是：使用者一進畫面，先發送 `API` 請求畫出完整的歷史圖表，隨後再由 `WebSocket` 負責將最新數據即時疊加進去。
-
-- **AI 的過度工程提議**：
-  `AI` 在協助進行 `Code Review` 時，為了防禦極端情況下的競態條件 (Race Condition)，強烈建議我在非同步流程中加入 `AbortController` 來強制中斷未完成的 Fetch 請求。
-- **我實測後的 UX 破壞**：
-  然而我親自實作並測試後發現，在 `React Strict Mode` 的雙重渲染下，這項建議會導致初次載入歷史資料時被意外中斷。這會使得圖表初始畫面變成一片空白，使用者必須坐在螢幕前「等即時推播一格一格把圖表慢慢畫出來」，嚴重破壞了使用者體驗。
-- **我的最終架構決策**：
-  我最終選擇**拒絕 AI 的建議**，果斷拔除 `AbortController` 並回歸最直覺、流暢的 Fetch 邏輯。在此同時，我還靠著自己的 Domain Knowledge 抓出了 `AI` 弄錯環境變數（`API_BASE_URL` 拼接錯誤）的 Hallucination Bug，成功找回專案預期的最佳體驗。
-
-這段經驗讓我深刻明白：**AI 很擅長寫出防禦性極強、看似無懈可擊的程式碼，但只有真正的開發者，才知道「產品與使用者真正要的體驗是什麼」。**
+- Dashboard 使用者體驗
+- 系統可靠度與可維護性
 
 ---
 
-### 🔗 實際與 AI 協作之對話紀錄
+### 1. 圖表拖曳排序與版面配置能力
 
-我將開發過程中幾次關鍵的思維碰撞與重構歷程完整記錄了下來，歡迎查閱：
+#### 現況
 
-- 🔗 [完整紀錄 1：Gemini 自我 Code Review 與 100 張圖表效能解法](./docs/Gemini-自已CodeReview&壓力測試.md)
-- 🔗 [完整紀錄 2：WebSocket 效能優化與 React 架構重構](./docs/React-WebSocket-優化與重構.md)
-- 🔗 [完整紀錄 3：ChatGPT 幫 Gemini Code Review 並由我拒絕改法](./docs/ChatGPT-CodeReview-拒絕建議.md)
+目前 Dashboard 中的圖表採固定順序排列，缺乏更靈活的版面配置能力。
+
+#### 預計優化方向
+
+前端預計導入 `dnd-kit` 實作高流暢度的 Grid Drag-and-Drop。
+
+後端則會於 Drizzle Schema 中新增：
+
+- `order`
+- `position`
+
+等欄位，用於持久化圖表版面資訊。
+
+完成後，使用者將可以：
+
+- 自由拖曳圖表排序
+- 客製化 Dashboard Layout
+- 長期保存個人化配置
+
+進一步提升 Dashboard 的實際使用體驗。
+
+---
+
+### 2. 自動化測試與穩定性防禦
+
+#### 現況
+
+目前專案開發重點放在核心功能與架構驗證，因此尚未完整導入自動化測試。
+
+#### 預計優化方向
+
+##### Unit Test
+
+針對：
+
+- Custom Hooks
+- WebSocket 流程
+- 非同步資料處理
+
+建立單元測試。
+
+例如：
+
+- WebSocket 斷線重連
+- API Error Handling
+- State Synchronization
+
+等情境。
+
+藉此提升高頻即時資料場景下的穩定性。
+
+##### E2E Test
+
+預計導入：
+
+- Playwright
+
+等工具，建立完整使用者流程測試。
+
+包含：
+
+1. 建立 Dashboard
+2. 選擇 Device 與 Attribute
+3. 新增 Chart
+4. 接收即時資料
+5. 刪除 Chart
+
+確保未來進行重構或功能擴充時，核心商業流程不被破壞。
+
+---
+
+# 6. 開發過程中遇到什麼卡關，怎麼解的（或我目前還沒解的）
+
+在本次專案中，基礎功能開發（例如 API 串接、UI 建置）推進相對順利。
+
+真正花費較多時間的部分，主要集中在：
+
+- 前端架構拆分
+- 即時資料流設計
+- AI 生成程式碼的驗證與重構
+
+這也是本次開發過程中最有收穫的部分。
+
+---
+
+### 1. AI 協作中的驗證與 Code Review
+
+#### 面臨的問題
+
+AI 能快速生成程式碼與提供實作方向，但在高頻非同步場景中，仍容易出現：
+
+- 過時語法
+- 不符合 React 生態的寫法
+- 不必要的複雜抽象
+- 與實際資料流不一致的邏輯
+
+部分建議在表面上看似合理，但實際導入後可能會：
+
+- 增加重繪成本
+- 提高狀態管理複雜度
+- 產生潛在效能問題
+
+#### 我的處理方式
+
+在開發過程中，我將 AI 定位為：
+
+- Pair Programming Assistant
+- Boilerplate Generator
+- Code Review 參考來源
+
+而非直接接受所有架構建議。
+
+實際開發時，我仍會：
+
+- 檢查與 Database Schema 是否一致
+- 確認是否符合 React 最佳實踐
+- 評估是否產生額外 Render Cost
+
+這也讓我更深刻體會到：
+
+> AI 能提升開發速度，但最終仍需要由開發者負責架構判斷與程式品質。
+
+---
+
+### 2. 避免 God Component 與主動架構重構
+
+#### 面臨的問題
+
+隨著功能逐漸增加，主頁面 `page.tsx` 一度同時負責：
+
+- API 請求
+- WebSocket 管理
+- URL State Synchronization
+- Dashboard 狀態管理
+- UI Rendering
+
+逐漸演變成典型的 God Component。
+
+這會導致：
+
+- 元件職責不清
+- 可維護性下降
+- 測試困難
+- 後續擴充成本提高
+
+#### 我的處理方式
+
+後續主動進行架構拆分與重構：
+
+##### UI Component 拆分
+
+將純 UI 元件拆分為：
+
+- `DashboardTabs`
+- `ChartToolbar`
+- `ChartGrid`
+- `ChartWidget`
+
+降低頁面層級的 UI 複雜度。
+
+##### Business Logic Hook 化
+
+將資料流與狀態邏輯抽離為：
+
+- `useCharts`
+- `useTelemetry`
+- `useDashboards`
+- `useVisibility`
+
+等 Custom Hooks。
+
+讓：
+
+- UI Rendering
+- State Management
+- Side Effect
+
+彼此職責分離。
+
+---
+
+# 7. 協助來源：我用了哪些 AI 工具，哪些部分主要靠 AI ？
+
+## AI 工具使用方式
+
+本專案開發過程中，主要使用：
+
+- Gemini
+- ChatGPT
+
+作為：
+
+- Pair Programming Assistant
+- Boilerplate Generator
+- Code Review 參考來源
+
+AI 協助的部分主要集中在：
+
+- API 基礎串接
+- TypeScript 型別補全
+- UI 初版生成
+- Hook 結構討論
+- ECharts 配置整理
+- 架構方向驗證
+
+而：
+
+- 系統架構設計
+- 資料流規劃
+- 效能取捨
+- React 狀態管理
+
+則由我自行決定與重構。
+
+---
+
+## 與 AI 協作過程中的實際問題
+
+我認為 AI 最大的價值在於：
+
+- 提升開發速度
+- 提供不同實作方向
+- 協助快速驗證想法
+
+但在高頻即時資料場景中，AI 仍容易產生：
+
+- 過度工程
+- 不必要抽象
+- 與實際資料流不一致的實作
+- React 生態已不推薦的寫法
+
+因此在開發過程中，我會持續進行：
+
+- 壓力測試
+- Render Cost 檢查
+- 架構複雜度評估
+
+## 避免直接接受所有 AI 提議。
+
+另外在驗證過程中，我也發現 AI 曾產生：
+
+- `API_BASE_URL` 拼接錯誤
+- 不符合實際 Schema 的資料格式
+
+等 Hallucination 問題。
+
+因此整個開發過程中，我會將 AI 生成內容視為：
+
+- 參考方案
+- 初稿
+- 討論對象
+
+而非直接採用的最終答案。
+
+---
+
+## AI 協作紀錄
+
+開發過程中的部分架構討論與 AI 協作紀錄如下：
+
+- [Gemini Code Review 與 100 張圖表效能討論](./docs/Gemini-自已CodeReview&壓力測試.md)
+- [WebSocket 效能優化與 React 架構重構](./docs/React-WebSocket-優化與重構.md)
+- [ChatGPT Code Review 與最終架構取捨](./docs/ChatGPT-CodeReview-拒絕建議.md)
 
 ---

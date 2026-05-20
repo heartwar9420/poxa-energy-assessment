@@ -26,170 +26,171 @@ ECharts 更新方式
 時間格式處理
 可維護性
 我幫你分成「值得改」跟「可選優化」。
+
 1. 最大的問題：每個 Widget 都開一條 WebSocket
-你現在：
-const ws = new WebSocket('ws://localhost:8080');
-放在每個 ChartWidget 裡。
-意思是：
-如果畫面有：
-voltage
-current
-power
-temperature
-四個圖表。
-你就會建立：
-4 條 websocket
-這其實非常浪費。
-更好的做法
-建立：
-全域唯一 websocket
-例如：
-src/lib/socket.ts
-let socket: WebSocket | null = null;
-export const getSocket = () => {
-if (!socket) {
-socket = new WebSocket('ws://localhost:8080');
-}
-return socket;
-};
-然後 widget：
-const ws = getSocket();
-這樣：
-全站只會有一條 socket
-效能差很多
-後端壓力也小很多
-這是最值得優化的地方。
+   你現在：
+   const ws = new WebSocket('ws://localhost:8080');
+   放在每個 ChartWidget 裡。
+   意思是：
+   如果畫面有：
+   voltage
+   current
+   power
+   temperature
+   四個圖表。
+   你就會建立：
+   4 條 websocket
+   這其實非常浪費。
+   更好的做法
+   建立：
+   全域唯一 websocket
+   例如：
+   src/lib/socket.ts
+   let socket: WebSocket | null = null;
+   export const getSocket = () => {
+   if (!socket) {
+   socket = new WebSocket('ws://localhost:8080');
+   }
+   return socket;
+   };
+   然後 widget：
+   const ws = getSocket();
+   這樣：
+   全站只會有一條 socket
+   效能差很多
+   後端壓力也小很多
+   這是最值得優化的地方。
 2. toLocaleTimeString 很耗效能
-你現在：
-date.toLocaleTimeString('zh-TW', { hour12: false });
-其實這個 API 很重。
-如果 telemetry 很頻繁：
-例如：
-每秒數十筆
-多個 widget
-會開始卡。
-更快的寫法
-直接自己 format：
-const formatTime = (isoString: string) => {
-const date = new Date(isoString);
-const h = String(date.getHours()).padStart(2, '0');
-const m = String(date.getMinutes()).padStart(2, '0');
-const s = String(date.getSeconds()).padStart(2, '0');
-return `${h}:${m}:${s}`;
-};
-效能會好很多。
+   你現在：
+   date.toLocaleTimeString('zh-TW', { hour12: false });
+   其實這個 API 很重。
+   如果 telemetry 很頻繁：
+   例如：
+   每秒數十筆
+   多個 widget
+   會開始卡。
+   更快的寫法
+   直接自己 format：
+   const formatTime = (isoString: string) => {
+   const date = new Date(isoString);
+   const h = String(date.getHours()).padStart(2, '0');
+   const m = String(date.getMinutes()).padStart(2, '0');
+   const s = String(date.getSeconds()).padStart(2, '0');
+   return `${h}:${m}:${s}`;
+   };
+   效能會好很多。
 3. shift() 會修改原陣列
-你現在：
-if (newData.length > 30) newData.shift();
-雖然可以用。
-但 React 比較推薦 immutable。
-更好的寫法
-return newData.slice(-30);
-完整：
-const newData = [
-...prevData,
-{
-timeLabel: formatTime(data.timestamp),
-value: Number(data.value),
-},
-];
-return newData.slice(-30);
-比較乾淨。
+   你現在：
+   if (newData.length > 30) newData.shift();
+   雖然可以用。
+   但 React 比較推薦 immutable。
+   更好的寫法
+   return newData.slice(-30);
+   完整：
+   const newData = [
+   ...prevData,
+   {
+   timeLabel: formatTime(data.timestamp),
+   value: Number(data.value),
+   },
+   ];
+   return newData.slice(-30);
+   比較乾淨。
 4. Number(data.value) 可能產生 NaN
-這是實戰常見問題。
-你現在：
-value: Number(data.value)
-但 backend 可能送：
-''
-null
-undefined
-'N/A'
-就會出問題。
-建議保護一下
-const parsedValue = Number(data.value);
-if (Number.isNaN(parsedValue)) return prevData;
-或者：
-value: Number(data.value) || 0
-但這會把 0 跟錯誤混在一起。
-我比較推薦第一種。
+   這是實戰常見問題。
+   你現在：
+   value: Number(data.value)
+   但 backend 可能送：
+   ''
+   null
+   undefined
+   'N/A'
+   就會出問題。
+   建議保護一下
+   const parsedValue = Number(data.value);
+   if (Number.isNaN(parsedValue)) return prevData;
+   或者：
+   value: Number(data.value) || 0
+   但這會把 0 跟錯誤混在一起。
+   我比較推薦第一種。
 5. WebSocket reconnect 機制
-現在：
-ws.close();
-如果 websocket：
-server 重啟
-network 斷線
-backend crash
-你的前端就永遠收不到資料了。
-建議增加 reconnect
-至少：
-ws.onclose = () => {
-setTimeout(connectWebSocket, 3000);
-};
-正式專案非常重要。
+   現在：
+   ws.close();
+   如果 websocket：
+   server 重啟
+   network 斷線
+   backend crash
+   你的前端就永遠收不到資料了。
+   建議增加 reconnect
+   至少：
+   ws.onclose = () => {
+   setTimeout(connectWebSocket, 3000);
+   };
+   正式專案非常重要。
 6. chartOption 其實還能再拆
-你現在：
-const chartOption = useMemo(() => {
-沒問題。
-但：
-每次資料更新都會建立完整 option object
-ECharts 其實支援：
-setOption({
-series: [{ data }]
-});
-只更新部分。
-更進階作法
-用：
-const chartRef = useRef<ReactECharts>(null);
-然後：
-chartRef.current?.getEchartsInstance().setOption(...)
-只更新 data。
-好處
-大量即時資料時：
-render 更少
-React 壓力更小
-chart 更順
+   你現在：
+   const chartOption = useMemo(() => {
+   沒問題。
+   但：
+   每次資料更新都會建立完整 option object
+   ECharts 其實支援：
+   setOption({
+   series: [{ data }]
+   });
+   只更新部分。
+   更進階作法
+   用：
+   const chartRef = useRef<ReactECharts>(null);
+   然後：
+   chartRef.current?.getEchartsInstance().setOption(...)
+   只更新 data。
+   好處
+   大量即時資料時：
+   render 更少
+   React 壓力更小
+   chart 更順
 7. 顏色 mapping 建議抽出去
-現在：
-attribute === 'voltage'
-? '#3b82f6'
-: attribute === 'power'
-之後 attribute 一多會變很醜。
-建議
-const ATTRIBUTE_COLORS: Record<string, string> = {
-voltage: '#3b82f6',
-power: '#10b981',
-current: '#f59e0b',
-};
-然後：
-color: ATTRIBUTE_COLORS[attribute] ?? '#6366f1'
-可維護性高很多。
+   現在：
+   attribute === 'voltage'
+   ? '#3b82f6'
+   : attribute === 'power'
+   之後 attribute 一多會變很醜。
+   建議
+   const ATTRIBUTE_COLORS: Record<string, string> = {
+   voltage: '#3b82f6',
+   power: '#10b981',
+   current: '#f59e0b',
+   };
+   然後：
+   color: ATTRIBUTE_COLORS[attribute] ?? '#6366f1'
+   可維護性高很多。
 8. notMerge={true} 不一定是好事
-你現在：
-notMerge={true}
-代表：
-每次都重建整張 chart
-資料量大時：
-反而可能更卡。
-建議測試：
-先拿掉：
-notMerge={false}
-或直接不寫。
-很多時候會更順。
+   你現在：
+   notMerge={true}
+   代表：
+   每次都重建整張 chart
+   資料量大時：
+   反而可能更卡。
+   建議測試：
+   先拿掉：
+   notMerge={false}
+   或直接不寫。
+   很多時候會更順。
 9. 歷史資料與即時資料可能重複
-這是實戰常見 bug。
-情境：
-fetch history
-websocket 已經開始送資料
-history 裡又包含最新資料
-就會：
-重複點
-建議
-加 timestamp 去重：
-const exists = prevData.some(
-d => d.timeLabel === formatTime(data.timestamp)
-);
-if (exists) return prevData;
-更好是 backend 提供唯一 id。
+   這是實戰常見 bug。
+   情境：
+   fetch history
+   websocket 已經開始送資料
+   history 裡又包含最新資料
+   就會：
+   重複點
+   建議
+   加 timestamp 去重：
+   const exists = prevData.some(
+   d => d.timeLabel === formatTime(data.timestamp)
+   );
+   if (exists) return prevData;
+   更好是 backend 提供唯一 id。
 10. 建議抽 custom hook
 現在 widget：
 fetch history
@@ -379,6 +380,7 @@ style={{ height: '260px', width: '100%' }}
 ---
 
 ## 🚀 第一階段：建立全域唯一 WebSocket 管理器 (Pub/Sub 模式)
+
 當畫面上有多個圖表時，原先的做法會讓每個圖表都跟後端建立一條連線。我們現在要建立一個**中心化的連線管理器**。
 這個管理器會採用 **發佈-訂閱模式 (Pub/Sub)**：全站只有一條 WebSocket 連線，當收到後端資料時，管理器會負責把資料分發給「對該設備與屬性感興趣」的圖表。
 請在你的專案中新增一個檔案 `src/lib/websocket.ts`（或是你習慣的工具函式路徑），並寫入以下程式碼：
@@ -416,7 +418,10 @@ class TelemetrySocketManager {
   // 建立連線
   private connect() {
     // 如果已經在連線中或已連線，就不重複觸發
-    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)
+    ) {
       return;
     }
 
@@ -425,7 +430,7 @@ class TelemetrySocketManager {
     this.ws.onmessage = (event) => {
       try {
         const data: BackendTelemetry = JSON.parse(event.data);
-        
+
         // 走訪所有訂閱者，只有 deviceId 和 attribute 吻合的才丟資料給他
         this.listeners.forEach((listener) => {
           if (listener.deviceId === data.deviceId && listener.attribute === data.attribute) {
@@ -440,7 +445,7 @@ class TelemetrySocketManager {
     this.ws.onclose = () => {
       console.warn('WebSocket 連線中斷，3 秒後嘗試重新連線...');
       this.ws = null;
-      
+
       // 自動重連機制
       if (!this.reconnectTimeout) {
         this.reconnectTimeout = window.setTimeout(() => {
@@ -462,14 +467,14 @@ class TelemetrySocketManager {
   subscribe(deviceId: string, attribute: string, callback: MessageCallback) {
     const listener: Listener = { deviceId, attribute, callback };
     this.listeners.add(listener);
-    
+
     // 只要有人訂閱，就確保 WebSocket 是連線狀態
     this.connect();
 
     // 取消訂閱的清理邏輯
     return () => {
       this.listeners.delete(listener);
-      
+
       // 進階優化：如果畫面上完全沒有圖表在聽資料了，就把 WebSocket 斷掉省資源
       if (this.listeners.size === 0 && this.ws) {
         this.ws.close();
@@ -480,7 +485,6 @@ class TelemetrySocketManager {
 
 // 導出單例 (Singleton)，確保整個 App 不管 import 幾次都共用這一個實例
 export const telemetrySocket = new TelemetrySocketManager('ws://localhost:8080');
-
 ```
 
 ### 💡 這個設計帶來的好處：
@@ -490,14 +494,14 @@ export const telemetrySocket = new TelemetrySocketManager('ws://localhost:8080')
 3. **資源回收：** 當使用者離開圖表頁面、畫面上沒有任何訂閱者時，會主動切斷連線，不佔用後端併發（Concurrency）額度。
 
 ---
+
 請問這個全域管理器的程式碼架構是否清楚？如果你建立好這個檔案了，我們可以進到第二階段：**把這套機制與歷史資料 Fetch 整合，抽成一個乾淨的 Custom Hook**。
 
 ## Turn 2
 
 ### 👤 User
 
-我把我們協作的code 拿給其他ai做檢查 你可以根據他的要求 幫我做程式優化嗎？
-有，而且：
+而且：
 這份比剛剛那份更適合重構
 因為現在已經出現：
 「頁面元件過胖」
@@ -584,115 +588,116 @@ onSelect={handleSelectDashboard}
 />
 你會立刻得到：
 好處
+
 1. Dashboard page 瘦很多
-現在太胖。
+   現在太胖。
 2. UI 可重用
-之後：
-mobile tabs
-sidebar
-dropdown mode
-都能重用。
+   之後：
+   mobile tabs
+   sidebar
+   dropdown mode
+   都能重用。
 3. React render 更乾淨
-之後可以：
-React.memo()
-第二個拆：
-ChartToolbar
-這塊：
-選 device
-選 attribute
-新增 chart
-非常適合獨立 component。
-會變：
-<ChartToolbar
-selectedDevice={selectedDevice}
-selectedAttribute={selectedAttribute}
-onDeviceChange={setSelectedDevice}
-onAttributeChange={setSelectedAttribute}
-onAddChart={handleAddChart}
-/>
-第三個拆：
-EmptyState component
-你現在：
-沒有 dashboard
-沒有 chart
-都寫重複。
-這種很適合：
-<EmptyState />
-這時候 page 就會變成：
-「像在閱讀故事」
-這是 React 很重要的境界。
-原本：
-一大坨 JSX
-重構後：
-<DashboardTabs />
-<CreateDashboardForm />
-<ChartToolbar />
-<ChartGrid />
-可讀性差超多（好的那種）
-第二階段才是：
-抽 hook
-這步比較進階。
-useDashboards()
-管理：
-dashboards
-createDashboard
-deleteDashboard
-currentDb
-useCharts()
-管理：
-charts
-addChart
-deleteChart
-fetchCharts
-到這階段後
-你的 page 會變成：
-const {
-dashboards,
-createDashboard,
-} = useDashboards();
-const {
-charts,
-addChart,
-} = useCharts();
-這就開始像真正商業 React 專案
-然後你會開始發現：
-React 真正的核心不是 JSX
-而是：
-狀態與職責分離
-這份 code 還有幾個技術問題
-1. render 期間 setState
-你這段：
-if (currentDbId !== prevDbId) {
-setPrevDbId(currentDbId);
-setCharts([]);
-}
-其實：
-不推薦
-雖然 React 容忍。
-但這很容易：
-double render
-StrictMode 問題
-state sync bug
-建議改回 useEffect
-這才是正統。
-2. fetch 很重複
-你現在：
-fetch(...)
-fetch(...)
-fetch(...)
-到處都是。
-建議建立：
-lib/api.ts
-例如：
-export const fetchDashboards = async ()
-3. loading state 可以拆
-現在：
-const [isLoading, setIsLoading]
-之後：
-dashboard loading
-chart loading
-會混亂。
-4. alert / confirm
+   之後可以：
+   React.memo()
+   第二個拆：
+   ChartToolbar
+   這塊：
+   選 device
+   選 attribute
+   新增 chart
+   非常適合獨立 component。
+   會變：
+   <ChartToolbar
+   selectedDevice={selectedDevice}
+   selectedAttribute={selectedAttribute}
+   onDeviceChange={setSelectedDevice}
+   onAttributeChange={setSelectedAttribute}
+   onAddChart={handleAddChart}
+   />
+   第三個拆：
+   EmptyState component
+   你現在：
+   沒有 dashboard
+   沒有 chart
+   都寫重複。
+   這種很適合：
+   <EmptyState />
+   這時候 page 就會變成：
+   「像在閱讀故事」
+   這是 React 很重要的境界。
+   原本：
+   一大坨 JSX
+   重構後：
+   <DashboardTabs />
+   <CreateDashboardForm />
+   <ChartToolbar />
+   <ChartGrid />
+   可讀性差超多（好的那種）
+   第二階段才是：
+   抽 hook
+   這步比較進階。
+   useDashboards()
+   管理：
+   dashboards
+   createDashboard
+   deleteDashboard
+   currentDb
+   useCharts()
+   管理：
+   charts
+   addChart
+   deleteChart
+   fetchCharts
+   到這階段後
+   你的 page 會變成：
+   const {
+   dashboards,
+   createDashboard,
+   } = useDashboards();
+   const {
+   charts,
+   addChart,
+   } = useCharts();
+   這就開始像真正商業 React 專案
+   然後你會開始發現：
+   React 真正的核心不是 JSX
+   而是：
+   狀態與職責分離
+   這份 code 還有幾個技術問題
+4. render 期間 setState
+   你這段：
+   if (currentDbId !== prevDbId) {
+   setPrevDbId(currentDbId);
+   setCharts([]);
+   }
+   其實：
+   不推薦
+   雖然 React 容忍。
+   但這很容易：
+   double render
+   StrictMode 問題
+   state sync bug
+   建議改回 useEffect
+   這才是正統。
+5. fetch 很重複
+   你現在：
+   fetch(...)
+   fetch(...)
+   fetch(...)
+   到處都是。
+   建議建立：
+   lib/api.ts
+   例如：
+   export const fetchDashboards = async ()
+6. loading state 可以拆
+   現在：
+   const [isLoading, setIsLoading]
+   之後：
+   dashboard loading
+   chart loading
+   會混亂。
+7. alert / confirm
 這種之後最好抽 UI modal。
 但目前先不用。
 我建議你現在的最佳順序
@@ -938,7 +943,8 @@ className="p-2 border border-gray-300 rounded-lg text-gray-900 bg-white shadow-s
 type="submit"
 className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow"
 >
-+ 建立
+
+- 建立
 </button>
 </form>
 </div>
@@ -1053,6 +1059,7 @@ fallback={
 我幫你把原本那一大坨 JSX，拆成了幾個乾淨的積木。請在你的 `components` 資料夾下新增這三個檔案：
 
 ### 1. 共用的空狀態元件 (`components/EmptyState.tsx`)
+
 你原本的程式碼中，沒有 Dashboard 和沒有 Chart 的畫面長得幾乎一模一樣。這最適合抽成一個共用元件！
 
 ```typescript
@@ -1075,6 +1082,7 @@ export default function EmptyState({ title, description }: EmptyStateProps) {
 ```
 
 ### 2. 頂部看板切換與新增列 (`components/DashboardTabs.tsx`)
+
 把最上面那一長條「選擇看板」跟「新增看板」的表單包在一起。外層只需要傳遞資料和被點擊時的動作（props）進來即可。
 
 ```typescript
@@ -1142,6 +1150,7 @@ export default function DashboardTabs({
 ```
 
 ### 3. 圖表控制工具列 (`components/ChartToolbar.tsx`)
+
 把下拉式選單和新增按鈕抽出來。
 
 ```typescript
@@ -1209,8 +1218,9 @@ export default function ChartToolbar({
 ---
 
 ### 🌟 4. 主頁面重構後：像讀故事一樣清晰
+
 現在，我們回到你的主檔案 (`page.tsx` 或你的 Dashboard component)。你看，原本落落長的 JSX 現在變得多麼易讀！
-*(備註：我也順手幫你把「渲染期間 setState」這個小雷點修掉了，改為在 fetchCharts 的時候先清空舊的圖表)*
+_(備註：我也順手幫你把「渲染期間 setState」這個小雷點修掉了，改為在 fetchCharts 的時候先清空舊的圖表)_
 
 ```typescript
 'use client';
@@ -1280,7 +1290,7 @@ function DashboardContent() {
 
     const fetchChartsData = async () => {
       // 修正原本「渲染期間 setState」的問題，改在 fetch 前清空舊資料
-      setCharts([]); 
+      setCharts([]);
       try {
         const res = await fetch(`http://localhost:8080/api/charts?dashboardId=${currentDbId}`);
         if (!res.ok) {
@@ -1365,7 +1375,7 @@ function DashboardContent() {
   return (
     <main className="p-8 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        
+
         {/* 積木 1：頂部 Tabs */}
         <DashboardTabs
           dashboards={dashboards}
@@ -1442,11 +1452,12 @@ export default function Dashboard() {
 ```
 
 ### 看出差別了嗎？
+
 在 `return` (JSX) 的部分，你不再需要在一團亂麻的 HTML 標籤中尋找邏輯了。現在的結構一目了然：
 有 Tabs -> 有無 Dashboard 判斷 -> 有的話顯示 Title 和 Toolbar -> 顯示圖表網格。
 這就是資深工程師寫 React 的方式！這步確認無誤的話，我們就可以進入下一回合：**把那一大串 fetch API 和狀態管理抽成 Custom Hooks (useDashboards, useCharts)。**
 
 ---
 
-*Exported from [Voyager](https://github.com/Nagi-ovo/gemini-voyager)*  
-*Generated on May 18, 2026 at 09:19 PM*
+_Exported from [Voyager](https://github.com/Nagi-ovo/gemini-voyager)_  
+_Generated on May 18, 2026 at 09:19 PM_
