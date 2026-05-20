@@ -1,7 +1,6 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
+import dynamic from 'next/dynamic';
 import React, { useState } from 'react';
 import DashboardTabs from '@/components/DashboardTabs';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -14,7 +13,7 @@ import { useCharts } from '@/hooks/useCharts';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { TimeRange } from '@/types/charts';
 
-export default function Dashboard() {
+function DashboardInner() {
   const {
     dashboards,
     currentDbId,
@@ -124,3 +123,14 @@ export default function Dashboard() {
     </main>
   );
 }
+
+const Dashboard = dynamic(() => Promise.resolve(DashboardInner), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-screen flex items-center justify-center text-sm font-medium text-slate-400 bg-slate-50 animate-pulse">
+      儲能資產環境初始化中...
+    </div>
+  ),
+});
+
+export default Dashboard;
