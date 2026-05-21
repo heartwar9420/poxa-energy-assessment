@@ -31,7 +31,8 @@ function DashboardInner() {
     openDeleteConfirm,
     closeDeleteConfirm,
   } = useDashboardActions();
-  const { isAdding } = useCharts(currentDbId);
+  const { charts: displayCharts, addChart, deleteChart, isAdding } = useCharts(currentDbId);
+  const summary = useDashboardSummary(currentDbId);
 
   const [newDbName, setNewDbName] = useState('');
   const [editingDbId, setEditingDbId] = useState<string | null>(null);
@@ -39,9 +40,6 @@ function DashboardInner() {
     type: 'relative',
     value: '1h',
   });
-
-  const { charts: displayCharts, addChart, deleteChart } = useCharts(currentDbId);
-  const summary = useDashboardSummary(currentDbId);
 
   const dashboardName = currentDb?.name ?? '未命名儀表板';
 
