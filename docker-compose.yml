@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
 
-    backend:
+  backend:
     build: ./backend
     container_name: energy_dashboard_backend
     working_dir: /app
