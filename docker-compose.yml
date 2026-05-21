@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15
@@ -18,17 +16,40 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+    backend:
     build: ./backend
     container_name: energy_dashboard_backend
+    working_dir: /app
     ports:
       - '8080:8080'
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     environment:
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
     command: sh -c "npx drizzle-kit push && npm run dev"
+
+  frontend:
+    image: node:20-alpine
+    container_name: energy_dashboard_frontend
+    working_dir: /app
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+      - API_URL=http://energy_dashboard_backend:8080/api
+      - WATCHPACK_POLLING=true
+    command: sh -c "echo '偵測到新環境，開始安裝前端套件...' && npm install --no-audit --no-fund && echo '前端套件安裝完成，正在啟動服務...' && npx next dev -p 3000 -H 0.0.0.0"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

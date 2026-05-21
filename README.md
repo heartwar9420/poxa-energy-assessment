@@ -159,28 +159,18 @@ flowchart TD
 
 ### 1. 設定環境變數
 
+請在專案根目錄下，複製環境變數範例檔並調整設定：
+
 ```bash
-cp backend/.env.example .env
+cp .env.example .env
 ```
 
 ---
 
-### 2. 一鍵啟動後端與資料庫 (Docker)
+### 2. 一鍵啟動前端、後端與資料庫 (Docker)
 
 ```bash
 docker compose up --build
-```
-
----
-
-### 3. 啟動 Frontend
-
-```bash
-cd frontend
-
-npm install
-
-npm run dev
 ```
 
 ---
