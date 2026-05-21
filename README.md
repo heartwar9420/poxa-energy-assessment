@@ -170,7 +170,7 @@ cp .env.example .env
 ### 2. 一鍵啟動前端、後端與資料庫 (Docker)
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 ---
