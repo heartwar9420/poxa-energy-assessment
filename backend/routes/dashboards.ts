@@ -10,6 +10,7 @@ router.get('/', async (req, res) => {
     const allDashboards = await db.select().from(dashboards);
     res.json(allDashboards);
   } catch (err) {
+    console.error('取得 dashboards 失敗:', err);
     res.status(500).json({ error: '無法取得dashboards資料' });
   }
 });
@@ -21,6 +22,7 @@ router.post('/', async (req, res) => {
     const newDb = await db.insert(dashboards).values({ name }).returning();
     res.json(newDb[0]);
   } catch (err) {
+    console.error('建立 dashboards 失敗:', err);
     res.status(500).json({ error: '無法建立dashboard' });
   }
 });
@@ -33,7 +35,7 @@ router.delete('/:id', async (req, res) => {
     await db.delete(dashboards).where(eq(dashboards.id, id));
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error('刪除 dashboards 失敗:', err);
     res.status(500).json({ error: '無法刪除dashboard' });
   }
 });
