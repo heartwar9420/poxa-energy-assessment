@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:15
@@ -10,16 +12,23 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     container_name: energy_dashboard_backend
     ports:
-      - '8001:3000'
+      - '8080:8080'
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://admin:password123@db:5432/energy_db
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    command: sh -c "npx drizzle-kit push && npm run dev"
 
 volumes:
   pgdata:

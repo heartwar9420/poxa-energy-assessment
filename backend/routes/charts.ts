@@ -47,9 +47,15 @@ router.post('/', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await db.delete(charts).where(eq(charts.id, id));
-    res.json({ success: true });
+    const chartID = req.params.id;
+    const deletedRows = await db.delete(charts).where(eq(charts.id, chartID)).returning();
+    if (deletedRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: '該圖表不存在或已被刪除',
+      });
+    }
+    return res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '刪除圖表失敗' });

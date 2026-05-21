@@ -42,7 +42,7 @@
 
 ## 技術棧（Tech Stack）
 
-- Frontend：Next.js 14（App Router）、TypeScript、Tailwind CSS
+- Frontend：Next.js 16（App Router）、TypeScript、Tailwind CSS
 - Backend：Node.js + TypeScript
 - Database：PostgreSQL + Drizzle ORM
 - Realtime：WebSocket
@@ -157,28 +157,18 @@ flowchart TD
 - Node.js（v20+）
 - Docker
 
-### 1. 啟動基礎服務
-
-於專案根目錄執行：
+### 1. 設定環境變數
 
 ```bash
-docker compose up --build -d
+cp backend/.env.example .env
 ```
 
 ---
 
-### 2. 啟動 Backend
+### 2. 一鍵啟動後端與資料庫 (Docker)
 
 ```bash
-cd backend
-
-cp .env.example .env
-
-npm install
-
-npx drizzle-kit push
-
-npm run dev
+docker compose up --build
 ```
 
 ---

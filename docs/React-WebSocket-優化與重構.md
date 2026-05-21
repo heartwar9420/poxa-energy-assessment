@@ -1205,7 +1205,7 @@ export default function ChartToolbar({
 
       <button
         onClick={onAddChart}
-        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-lg shadow transition-colors h-[42px]"
+        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-lg shadow transition-colors h-10.5"
       >
         新增圖表
       </button>
