@@ -39,7 +39,6 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.patch('/:id', async (req, res) => {
-  console.log('====== 收到前端 Rename 請求了！ ======', { id: req.params.id, body: req.body });
   try {
     const { id } = req.params;
     const { name } = req.body;
