@@ -14,7 +14,7 @@ interface ChartRendererProps {
 const ChartRenderer = ({
   option,
   height = '350px',
-  notMerge = true,
+  notMerge = false,
   renderer = 'canvas',
 }: ChartRendererProps) => {
   return (

@@ -1,3 +1,5 @@
+'use client';
+
 import { WS_BASE_URL } from '@/lib/configs';
 
 export interface BackendTelemetry {
@@ -13,9 +15,7 @@ type MessageCallback = (data: BackendTelemetry) => void;
 class TelemetrySocketManager {
   private url: string;
   private ws: WebSocket | null = null;
-
   private listeners = new Map<string, Set<MessageCallback>>();
-
   private reconnectTimeout: number | null = null;
   private reconnectAttempts = 0;
   private intentionalClose = false;
@@ -25,6 +25,10 @@ class TelemetrySocketManager {
   }
 
   private connect() {
+    if (this.listeners.size === 0) {
+      return;
+    }
+
     if (
       this.ws &&
       (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)
@@ -42,10 +46,8 @@ class TelemetrySocketManager {
     this.ws.onmessage = (event) => {
       try {
         const incomingData = JSON.parse(event.data);
-
         const processData = (data: unknown) => {
           const payload = data as Record<string, unknown>;
-
           if (
             payload &&
             typeof payload === 'object' &&
@@ -54,7 +56,6 @@ class TelemetrySocketManager {
           ) {
             const key = `${payload.deviceId}:${payload.attribute}`;
             const callbacks = this.listeners.get(key);
-
             if (callbacks) {
               callbacks.forEach((cb) => cb(payload as unknown as BackendTelemetry));
             }
@@ -78,13 +79,10 @@ class TelemetrySocketManager {
         return;
       }
 
-      console.warn(
-        `WebSocket 連線中斷 (Code: ${event.code}, Reason: ${event.reason || '無原因'})。`,
-      );
+      console.warn(`WebSocket 連線中斷 (Code: ${event.code})。`);
 
       if (!this.reconnectTimeout) {
         const delay = Math.min(3000 * Math.pow(2, this.reconnectAttempts), 30000);
-        console.log(`${delay / 1000} 秒後嘗試重新連線...`);
 
         this.reconnectTimeout = window.setTimeout(() => {
           this.reconnectTimeout = null;
@@ -118,9 +116,17 @@ class TelemetrySocketManager {
         }
       }
 
-      if (this.listeners.size === 0 && this.ws) {
+      if (this.listeners.size === 0) {
         this.intentionalClose = true;
-        this.ws.close();
+
+        if (this.ws) {
+          this.ws.close();
+        }
+
+        if (this.reconnectTimeout) {
+          window.clearTimeout(this.reconnectTimeout);
+          this.reconnectTimeout = null;
+        }
       }
     };
   }
